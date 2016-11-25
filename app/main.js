@@ -1,40 +1,105 @@
-'use strict';
-const app = require('app'); // Module to control application life.
-const BrowserWindow = require('browser-window'); // Module to create native browser window.
+const path = require('path');
+const electron = require('electron');
 
-// Keep a global reference of the window object, if you don't, the window will
-// be closed automatically when the JavaScript object is garbage collected.
-let mainWindow;
+const BrowserWindow = electron.BrowserWindow;
+const app = electron.app;
 
-// Quit when all windows are closed.
-app.on('window-all-closed', function () {
-    // On OS X it is common for applications and their menu bar
-    // to stay active until the user quits explicitly with Cmd + Q
-    if (process.platform != 'darwin') {
-        app.quit();
+const debug = /--debug/.test(process.argv[2]);
+
+if (process.mas) {
+  app.setName('Electron APIs')
+}
+
+let mainWindow = null;
+
+function initialize() {
+  const shouldQuit = makeSingleInstance();
+  if (shouldQuit) {
+    return app.quit();
+  }
+
+  function createWindow() {
+    const windowOptions = {
+      width: 1080,
+      minWidth: 680,
+      height: 840,
+      title: app.getName()
+    };
+
+    if (process.platform === 'linux') {
+      windowOptions.icon = path.join(__dirname, '/assets/app-icon/png/512.png')
     }
-});
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-app.on('ready', function () {
-    // Create the browser window.
-    mainWindow = new BrowserWindow({
-        width: 800,
-        height: 600
-    });
+    mainWindow = new BrowserWindow(windowOptions);
+    mainWindow.loadURL(path.join('file://', __dirname, '/index.html'));
 
-    // and load the index.html of the app.
-    mainWindow.loadURL('file://' + __dirname + '/index.html');
+    // Launch fullscreen with DevTools open, usage: npm run debug
+    if (debug) {
+      mainWindow.webContents.openDevTools();
+      mainWindow.maximize();
+      require('devtron').install();
+    }
 
-    // Open the DevTools.
-    // mainWindow.webContents.openDevTools();
-
-    // Emitted when the window is closed.
     mainWindow.on('closed', function () {
-        // Dereference the window object, usually you would store windows
-        // in an array if your app supports multi windows, this is the time
-        // when you should delete the corresponding element.
-        mainWindow = null;
+      mainWindow = null
     });
-});
+  }
+
+  app.on('ready', function () {
+    createWindow();
+  });
+
+  app.on('window-all-closed', function () {
+    if (process.platform !== 'darwin') {
+      app.quit()
+    }
+  });
+
+  app.on('activate', function () {
+    if (mainWindow === null) {
+      createWindow()
+    }
+  });
+}
+
+// Make this app a single instance app.
+//
+// The main window will be restored and focused instead of a second window
+// opened when a person attempts to launch a second instance.
+//
+// Returns true if the current version of the app should quit instead of
+// launching.
+function makeSingleInstance() {
+  if (process.mas) {
+    return false;
+  }
+
+  return app.makeSingleInstance(function () {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.focus()
+    }
+  });
+}
+
+// Handle Squirrel on Windows startup events
+switch (process.argv[1]) {
+  case '--squirrel-install':
+    // autoUpdater.createShortcut(function () {
+  //   app.quit()
+  // });
+  // break;
+  case '--squirrel-uninstall':
+    // autoUpdater.removeShortcut(function () {
+    //   app.quit()
+    // });
+    // break;
+  case '--squirrel-obsolete':
+  case '--squirrel-updated':
+    app.quit();
+    break;
+  default:
+    initialize()
+}
